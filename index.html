@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resident Digital Key</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 400px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; background-color: #1a73e8; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+        button:hover { background-color: #1557b0; }
+        #qrcode { display: flex; justify-content: center; margin: 20px 0; }
+        .timer-box { color: #d93025; font-weight: bold; font-size: 18px; margin-top: 10px; }
+        .hidden { display: none; }
+        .member-info { margin-bottom: 20px; color: #5f6368; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="login-section">
+        <h2>Building Access</h2>
+        <p>Login to generate your digital key</p>
+        <input type="text" id="flat" placeholder="Flat Number (e.g., 101)">
+        <input type="password" id="ca" placeholder="Electricity CA Number">
+        <button onclick="handleLogin()">Generate QR Key</button>
+    </div>
+
+    <div id="qr-section" class="hidden">
+        <h2 id="welcome-msg">Welcome!</h2>
+        <p class="member-info" id="member-details"></p>
+        <div id="qrcode"></div>
+        <p>Scan this at the entrance</p>
+        <div class="timer-box">Expires in: <span id="timer">120:00</span></div>
+        <br>
+        <button style="background-color: #5f6368;" onclick="location.reload()">Logout / Refresh</button>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. PASTE YOUR GOOGLE SCRIPT URL HERE
+    // ==========================================
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzB80m_5FGS3MrjZxHMG8PBmoWWpt9yp45wP6vbZsxm4BlTRFb2AoJl-fQdVxSbJ2L2/exec";
+
+    let timeLeft = 120 * 60; // 120 minutes in seconds
+    let timerInterval;
+
+    async function handleLogin() {
+        const flat = document.getElementById('flat').value;
+        const ca = document.getElementById('ca').value;
+        const btn = document.querySelector('button');
+
+        if(!flat || !ca) return alert("Please fill all fields");
+
+        btn.innerText = "Verifying...";
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`${SCRIPT_URL}?action=login&flat=${flat}&ca=${ca}`);
+            const data = await response.json();
+
+            if (data.status === "success") {
+                showQR(data.name, data.token, flat);
+            } else {
+                alert("Login Failed: " + (data.message || "Invalid credentials"));
+                btn.innerText = "Generate QR Key";
+                btn.disabled = false;
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Connection Error. Check SCRIPT_URL or Internet.");
+            btn.innerText = "Generate QR Key";
+            btn.disabled = false;
+        }
+    }
+
+    function showQR(name, token, flat) {
+        document.getElementById('login-section').classList.add('hidden');
+        document.getElementById('qr-section').classList.remove('hidden');
+        document.getElementById('welcome-msg').innerText = "Hello, " + name;
+        document.getElementById('member-details').innerText = "Flat " + flat;
+
+        // Clear any old QR code
+        document.getElementById("qrcode").innerHTML = "";
+
+        // Generate the QR
+        new QRCode(document.getElementById("qrcode"), {
+            text: token,
+            width: 220,
+            height: 220,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
+
+        startTimer();
+    }
+
+    function startTimer() {
+        const timerDisplay = document.getElementById('timer');
+        timerInterval = setInterval(() => {
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            timerDisplay.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                alert("Your key has expired. Please log in again.");
+                location.reload();
+            }
+            timeLeft--;
+        }, 1000);
+    }
+</script>
+
+</body>
+</html>
