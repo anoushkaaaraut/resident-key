@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resident Access Portal</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root { --primary: #2563eb; --error: #dc2626; --bg: #f8fafc; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 100%; max-width: 380px; text-align: center; }
+        h2 { margin-top: 0; color: #1e293b; }
+        input { width: 100%; padding: 0.75rem; margin: 0.5rem 0; border: 1px solid #e2e8f0; border-radius: 0.5rem; box-sizing: border-box; font-size: 1rem; }
+        button { width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer; margin-top: 1rem; transition: opacity 0.2s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #qrcode { margin: 1.5rem auto; display: flex; justify-content: center; }
+        .timer { color: var(--error); font-weight: 700; font-size: 1.2rem; margin: 1rem 0; }
+        .hidden { display: none; }
+        .status-msg { font-size: 0.875rem; margin-top: 1rem; color: #64748b; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div id="login-view">
+        <h2>Gym & Building Access</h2>
+        <p style="color: #64748b;">Enter details to generate key</p>
+        <input type="text" id="flat" placeholder="Flat Number (e.g. 101)" required>
+        <input type="password" id="ca" placeholder="Electricity CA Number" required>
+        <button id="login-btn" onclick="handleLogin()">Generate QR Code</button>
+        <p id="error-text" style="color: var(--error); font-size: 0.875rem; margin-top: 1rem; display: none;"></p>
+    </div>
+
+    <div id="qr-view" class="hidden">
+        <h3 id="user-name">Welcome</h3>
+        <div id="qrcode"></div>
+        <p>Valid for 2 Hours | Single Use</p>
+        <div class="timer" id="timer">120:00</div>
+        <button onclick="location.reload()" style="background: #64748b;">Logout</button>
+    </div>
+</div>
+
+
+
+<script>
+    // ==========================================
+    // 1. PASTE YOUR GOOGLE WEB APP URL HERE
+    // ==========================================
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcUFI-SRIVFBVW3KqirB3a4cP1F1skk4DYjHNeTC3McUpu0vKKBHjKOoPJCMVgmcKx/exec"; 
+
+    let timeLeft = 120 * 60; // 2 hours
+    let countdown;
+
+    async function handleLogin() {
+        const flat = document.getElementById('flat').value.trim();
+        const ca = document.getElementById('ca').value.trim();
+        const btn = document.getElementById('login-btn');
+        const errDisplay = document.getElementById('error-text');
+
+        if (!flat || !ca) {
+            showError("Please fill in all fields.");
+            return;
+        }
+
+        // Reset UI
+        errDisplay.style.display = 'none';
+        btn.disabled = true;
+        btn.innerText = "Connecting to Server...";
+
+        try {
+            // We use mode: 'cors' and a timeout to catch issues quickly
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+            const url = `${SCRIPT_URL}?action=login&flat=${encodeURIComponent(flat)}&ca=${encodeURIComponent(ca)}`;
+            
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(id);
+
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+            const data = await response.json();
+
+            if (data.status === "success") {
+                showQR(data.name, data.token);
+            } else {
+                showError(data.message || "Invalid Credentials.");
+            }
+        } catch (err) {
+            console.error(err);
+            if (err.name === 'AbortError') {
+                showError("Connection timed out. Check your internet.");
+            } else {
+                showError("Connection Error. Ensure Script is deployed to 'Anyone'.");
+            }
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Generate QR Code";
+        }
+    }
+
+    function showQR(name, token) {
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('qr-view').classList.remove('hidden');
+        document.getElementById('user-name').innerText = "Hello, " + name;
+
+        // Generate QR
+        new QRCode(document.getElementById("qrcode"), {
+            text: token,
+            width: 200,
+            height: 200,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
+
+        startTimer();
+    }
+
+    function startTimer() {
+        countdown = setInterval(() => {
+            timeLeft--;
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            document.getElementById('timer').innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                alert("Key Expired!");
+                location.reload();
+            }
+        }, 1000);
+    }
+
+    function showError(msg) {
+        const errDisplay = document.getElementById('error-text');
+        errDisplay.innerText = msg;
+        errDisplay.style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
